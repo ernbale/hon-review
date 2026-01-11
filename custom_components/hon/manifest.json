@@ -1,10 +1,12 @@
 {
   "domain": "hon",
   "name": "hOn",
-  "codeowners": ["@gvigroux"],
+  "codeowners": [
+    "@ernbale"
+  ],
   "config_flow": true,
-  "documentation": "https://github.com/gvigroux/hon",
+  "documentation": "https://github.com/ernbale/hon-review",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/gvigroux/hon/issues",
-  "version": "0.7.22"
+  "issue_tracker": "https://github.com/ernbale/hon-review/issues",
+  "version": "1.0.0"
 }
