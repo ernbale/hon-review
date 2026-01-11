@@ -32,7 +32,7 @@ This version includes fixes and improvements over the original repository, speci
 1. Click the button above to open HACS directly to this repository.
 2. Or manually copy the `custom_components/hon` directory to your Home Assistant `custom_components` directory.
 2. Restart Home Assistant.
-3. Add the integration via the UI.
+3. Add the integration via the UI (search for **hOn review**).
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=hon)
 

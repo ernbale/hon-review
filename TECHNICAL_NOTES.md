@@ -53,3 +53,19 @@ Original repository had a flat structure (all files in root).
 ## 5. Future Maintenance
 - **Watch out for**: `HonParameterRange` objects in `climate.py`. If the API schema changes for temperature steps, the `get` logic might fail.
 - **Authentication**: Uses a standard user/password flow (likely in `config_flow.py`). If hOn changes auth (e.g., 2FA), this will break.
+
+## 6. HACS Distribution & Releasing
+To ensure this integration works with HACS as a custom repository:
+1.  **`hacs.json`**: Required at root.
+    ```json
+    {
+      "name": "hOn review",
+      "render_readme": true,
+      "filename": "hon.zip",
+      "hide_default_branch": true
+    }
+    ```
+2.  **Manifest Versioning**: `manifest.json` MUST have a valid "version" key (e.g., "1.0.1"). HACS often fails if this is missing or invalid.
+3.  **Git Tags**: HACS looks for GitHub Releases/Tags.
+    - Workflow: Commit changes -> `git tag v1.0.X` -> `git push origin v1.0.X`.
+    - This forces HACS to see a new update available.
