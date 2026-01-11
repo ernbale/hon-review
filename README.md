@@ -32,6 +32,8 @@ This version includes fixes and improvements over the original repository, speci
 2. Restart Home Assistant.
 3. Add the integration via the UI.
 
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=hon)
+
 ## Credits
 
 Based on the work by [gvigroux](https://github.com/gvigroux/hon).
