@@ -25,7 +25,10 @@ This version includes fixes and improvements over the original repository, speci
 
 ## Installation
 
-1. Copy the `custom_components/hon` directory to your Home Assistant `custom_components` directory.
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ernbale&repository=hon-review&category=integration)
+
+1. Click the button above to open HACS directly to this repository.
+2. Or manually copy the `custom_components/hon` directory to your Home Assistant `custom_components` directory.
 2. Restart Home Assistant.
 3. Add the integration via the UI.
 
