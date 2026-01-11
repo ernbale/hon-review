@@ -1,6 +1,6 @@
 {
   "domain": "hon",
-  "name": "hOn",
+  "name": "hOn review",
   "codeowners": [
     "@ernbale"
   ],
@@ -8,5 +8,5 @@
   "documentation": "https://github.com/ernbale/hon-review",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/ernbale/hon-review/issues",
-  "version": "1.0.0"
+  "version": "1.0.1"
 }
