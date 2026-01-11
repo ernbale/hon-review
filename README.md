@@ -13,6 +13,16 @@ This version includes fixes and improvements over the original repository, speci
 - **Optimistic UI Updates**: Implemented "optimistic" state updates. When you change settings (temp, mode, fan), the UI updates immediately and waits for the confirmation, fixing the annoying "flickering" effect where controls would jump back to the old state.
 - **Bug Fixes**: Fixed issues with integer/string type conversions for command parameters.
 
+## Miglioramenti Chiave (Italiano)
+
+### 🛠️ Stabilità
+- **Timeout di Rete**: Aggiunto un timeout di 30 secondi alle chiamate API per evitare che Home Assistant si blocchi all'infinito se i server hOn non rispondono.
+
+### ❄️ Controllo Clima
+- **Controllo Avanzato Alette**: Aggiunte posizioni specifiche per le alette verticali (`Alto`, `Medio-Alto`, `Medio-Basso`, `Basso`) per un controllo preciso del flusso d'aria.
+- **Aggiornamenti UI "Ottimistici"**: Implementati aggiornamenti di stato istantanei. Quando modifichi temperatura o modalità, l'interfaccia risponde subito senza aspettare la conferma del server, eliminando il fastidioso effetto "flickering" (sfarfallio) dei controlli.
+- **Correzione Bug**: Risolti problemi di conversione tipo (intero/stringa) nell'invio dei comandi.
+
 ## Installation
 
 1. Copy the `custom_components/hon` directory to your Home Assistant `custom_components` directory.
