@@ -7,6 +7,7 @@ This version includes fixes and improvements over the original repository, speci
 
 ### 🛠️ Stability
 - **Network Timeouts**: Added a 30-second timeout to API requests to prevent Home Assistant from hanging indefinitely when hOn servers are unresponsive.
+- **Force Reload**: Added a button to force a data refresh from hOn servers (useful if status gets out of sync).
 
 ### ❄️ Climate Control
 - **Advanced Flap Control**: Added specific vertical swing positions (`High`, `Mid-High`, `Mid-Low`, `Low`) for precise airflow control.
@@ -17,6 +18,7 @@ This version includes fixes and improvements over the original repository, speci
 
 ### 🛠️ Stabilità
 - **Timeout di Rete**: Aggiunto un timeout di 30 secondi alle chiamate API per evitare che Home Assistant si blocchi all'infinito se i server hOn non rispondono.
+- **Ricarica Forzata**: Aggiunto un pulsante per forzare l'aggiornamento dei dati dai server hOn (utile se lo stato non è sincronizzato).
 
 ### ❄️ Controllo Clima
 - **Controllo Avanzato Alette**: Aggiunte posizioni specifiche per le alette verticali (`Alto`, `Medio-Alto`, `Medio-Basso`, `Basso`) per un controllo preciso del flusso d'aria.
