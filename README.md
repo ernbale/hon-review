@@ -36,6 +36,8 @@ This version includes fixes and improvements over the original repository, speci
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=hon)
 
+![Clima Soggiorno – Home Assistant](clima.png)
+
 ## Credits
 
 Based on the work by [gvigroux](https://github.com/gvigroux/hon).
