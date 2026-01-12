@@ -36,7 +36,7 @@ This version includes fixes and improvements over the original repository, speci
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=hon)
 
-<img src="clima.png" width="400" alt="Clima Soggiorno – Home Assistant">
+<img src="clima.png" width="300" alt="Clima Soggiorno – Home Assistant">
 
 ## Credits
 
