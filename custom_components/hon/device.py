@@ -118,10 +118,20 @@ class HonDevice(CoordinatorEntity):
 
     async def load_context(self):
         data = await self._hon.async_get_context(self)
-        #_LOGGER.warning(data)
-        self._attributes = data
-        for name, values in self._attributes.pop("shadow", {'NA': 0}).get("parameters").items():
-            self._attributes.setdefault("parameters", {})[name] = values["parNewVal"]
+        self._attributes = data or {}
+
+        shadow = self._attributes.pop("shadow", None)
+        if not shadow:
+            _LOGGER.warning("Unable to get device context: no shadow data in: %s", self._attributes)
+            return
+
+        parameters = shadow.get("parameters")
+        if not parameters:
+            _LOGGER.warning("Unable to get device context: no parameters in shadow data. %s", self._attributes)
+            return
+
+        for name, values in parameters.items():
+            self._attributes.setdefault("parameters", {})[name] = values.get("parNewVal")
 
     @property
     def data(self):
