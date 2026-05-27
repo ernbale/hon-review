@@ -192,14 +192,25 @@ class HonDevice(CoordinatorEntity):
 
     def update_command(self, command, parameters):
         for key in command.parameters.keys():
-            if( key in parameters 
-                and command.parameters.get(key).value != parameters.get(key) 
-                and not isinstance(command.parameters.get(key), HonParameterFixed)):
+            param = command.parameters.get(key)
 
-                if( isinstance(command.parameters.get(key), HonParameterEnum) and parameters.get(key) not in command.parameters.get(key).values): 
-                    _LOGGER.warning(f"Unable to update parameter [{key}] with value [{parameters.get(key)}] because not in range {command.parameters.get(key).values}. Use default instead.")
-                else:
-                    command.parameters.get(key).value = parameters.get(key)
+            if (key not in parameters or isinstance(param, HonParameterFixed)):
+                continue
+
+            new_val = parameters.get(key)
+            if param.value == new_val:
+                continue
+
+            try:
+                param.value = new_val
+            except Exception as e:
+                _LOGGER.warning("Update_command: Invalid %s=%s (%s)", key, new_val, e)
+                if hasattr(param, "default"):
+                    try:
+                        param.value = param.default
+                        _LOGGER.warning("Update_command: Use Fallback %s -> default %s", key, param.default)
+                    except Exception:
+                        pass
 
     def settings_command(self, parameters = {}):
         if( "settings" not in self._commands ):
