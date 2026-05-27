@@ -120,7 +120,7 @@ class HonClimateEntity(CoordinatorEntity, ClimateEntity):
         self._name = appliance.get('nickName', appliance.get('modelName', 'Climate'))
         self._connectivity = appliance['connectivity']
         self._model = appliance['modelName']
-        self._series = appliance['series']
+        self._series = appliance.get('series', '')
         self._modelId = appliance['applianceModelId']
         self._type_name = appliance['applianceTypeName']
         self._serialNumber = appliance['serialNumber']
@@ -157,8 +157,8 @@ class HonClimateEntity(CoordinatorEntity, ClimateEntity):
         temp_range = parameters.get('tempSel')
         self._attr_target_temperature_step = PRECISION_WHOLE
         if isinstance(temp_range, HonParameterRange):
-            self._att_min_temp = temp_range.min
-            self._att_max_temp = temp_range.max
+            self._attr_min_temp = temp_range.min
+            self._attr_max_temp = temp_range.max
 
         self._hon_fan_modes = parameters.get('windSpeed').values
         for fan_mode in self._hon_fan_modes:
