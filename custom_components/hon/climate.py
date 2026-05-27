@@ -157,8 +157,8 @@ class HonClimateEntity(CoordinatorEntity, ClimateEntity):
         temp_range = parameters.get('tempSel')
         self._attr_target_temperature_step = PRECISION_WHOLE
         if isinstance(temp_range, HonParameterRange):
-            self._att_min_temp = temp_range.min
-            self._att_max_temp = temp_range.max
+            self._attr_min_temp = temp_range.min
+            self._attr_max_temp = temp_range.max
 
         self._hon_fan_modes = parameters.get('windSpeed').values
         for fan_mode in self._hon_fan_modes:
