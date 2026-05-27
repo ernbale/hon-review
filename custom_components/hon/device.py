@@ -21,7 +21,7 @@ class HonDevice(CoordinatorEntity):
         self._name          = appliance.get("nickName", APPLIANCE_DEFAULT_NAME.get(str(self._type_id), "Device ID: " + str(self._type_id)))
         self._mac           = appliance["macAddress"]
         self._model         = appliance["modelName"]
-        self._series        = appliance.get("series", "")
+        self._series        = appliance["series"]
         self._model_id      = appliance["applianceModelId"]
         self._serial_number = appliance["serialNumber"]
         self._fw_version    = appliance["fwVersion"]
@@ -118,20 +118,10 @@ class HonDevice(CoordinatorEntity):
 
     async def load_context(self):
         data = await self._hon.async_get_context(self)
-        self._attributes = data or {}
-
-        shadow = self._attributes.pop("shadow", None)
-        if not shadow:
-            _LOGGER.warning("Unable to get device context: no shadow data in: %s", self._attributes)
-            return
-
-        parameters = shadow.get("parameters")
-        if not parameters:
-            _LOGGER.warning("Unable to get device context: no parameters in shadow data. %s", self._attributes)
-            return
-
-        for name, values in parameters.items():
-            self._attributes.setdefault("parameters", {})[name] = values.get("parNewVal")
+        #_LOGGER.warning(data)
+        self._attributes = data
+        for name, values in self._attributes.pop("shadow", {'NA': 0}).get("parameters").items():
+            self._attributes.setdefault("parameters", {})[name] = values["parNewVal"]
 
     @property
     def data(self):
@@ -192,25 +182,14 @@ class HonDevice(CoordinatorEntity):
 
     def update_command(self, command, parameters):
         for key in command.parameters.keys():
-            param = command.parameters.get(key)
+            if( key in parameters 
+                and command.parameters.get(key).value != parameters.get(key) 
+                and not isinstance(command.parameters.get(key), HonParameterFixed)):
 
-            if (key not in parameters or isinstance(param, HonParameterFixed)):
-                continue
-
-            new_val = parameters.get(key)
-            if param.value == new_val:
-                continue
-
-            try:
-                param.value = new_val
-            except Exception as e:
-                _LOGGER.warning("Update_command: Invalid %s=%s (%s)", key, new_val, e)
-                if hasattr(param, "default"):
-                    try:
-                        param.value = param.default
-                        _LOGGER.warning("Update_command: Use Fallback %s -> default %s", key, param.default)
-                    except Exception:
-                        pass
+                if( isinstance(command.parameters.get(key), HonParameterEnum) and parameters.get(key) not in command.parameters.get(key).values): 
+                    _LOGGER.warning(f"Unable to update parameter [{key}] with value [{parameters.get(key)}] because not in range {command.parameters.get(key).values}. Use default instead.")
+                else:
+                    command.parameters.get(key).value = parameters.get(key)
 
     def settings_command(self, parameters = {}):
         if( "settings" not in self._commands ):
