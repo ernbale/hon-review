@@ -98,9 +98,11 @@ async def async_get_device_ids(hass, call):
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hon = HonConnection(hass, entry)
     try:
-        await hon.async_authorize()
-    except (ConnectionError, asyncio.TimeoutError, aiohttp.ClientError) as err:
-        raise ConfigEntryNotReady(f"Unable to connect to hOn: {err}") from err
+        result = await hon.async_authorize()
+    except Exception as e:
+        raise ConfigEntryNotReady(f"hOn connection failed: {e}") from e
+    if not result:
+        raise ConfigEntryNotReady("hOn authentication failed")
 
     # Log all appliances
     _LOGGER.debug(f"Appliances: {hon.appliances}")
