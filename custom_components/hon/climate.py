@@ -218,8 +218,14 @@ class HonClimateEntity(CoordinatorEntity, ClimateEntity):
         if self._watcher is not None:
             return
 
-        self._attr_target_temperature = int(float(self._device.get('tempSel')))
-        self._attr_current_temperature = float(self._device.get('tempIndoor'))
+        try:
+            self._attr_target_temperature = int(float(self._device.get('tempSel')))
+        except (TypeError, ValueError):
+            pass
+        try:
+            self._attr_current_temperature = float(self._device.get('tempIndoor'))
+        except (TypeError, ValueError):
+            pass
 
         self._attr_fan_mode = get_key(CLIMATE_FAN_MODE, self._device.get('windSpeed'), self._attr_fan_modes[0])
 
