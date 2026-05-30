@@ -76,6 +76,9 @@ class HonConnection:
         timeout = aiohttp.ClientTimeout(total=30)
         self._session = aiohttp.ClientSession(headers=self._header, connector=aiohttp.TCPConnector(ssl=False), timeout=timeout)
         self._appliances = []
+        # Serializza la ri-autenticazione: i coordinator (uno per device) girano in
+        # parallelo, senza lock un token scaduto scatenerebbe N login simultanei.
+        self._auth_lock = asyncio.Lock()
 
     async def async_close(self):
         await self._session.close()
@@ -271,6 +274,25 @@ class HonConnection:
             _LOGGER.debug(f"Commands: {result}")
             return result
 
+    async def _fetch_context(self, device):
+        """Esegue la GET del context. Ritorna il payload, oppure None se il server
+        risponde con uno status != 200 (es. 401/403 token invalidato): None segnala
+        al chiamante di ri-autenticarsi. Gli errori di trasporto (DNS/connessione)
+        NON vengono catturati qui: propagano e li gestisce HA come UpdateFailed."""
+        params = {
+            "macAddress": device.mac_address,
+            "applianceType": device.appliance_type,
+            "category": "CYCLE"
+        }
+        url = f"{API_URL}/commands/v1/context"
+        async with self._session.get(url, params=params, headers=self._headers) as response:
+            if response.status != 200:
+                _LOGGER.debug(f"hOn context HTTP {response.status} for mac[{device.mac_address}]")
+                return None
+            data = await response.json()
+            _LOGGER.debug(f"Context for mac[{device.mac_address}] type [{device.appliance_type}] {data}")
+            return data.get("payload", {})
+
     async def async_get_context(self, device):
 
         # Create a new hOn session to avoid reaching the expiration
@@ -279,16 +301,26 @@ class HonConnection:
             self._session.cookie_jar.clear()
             await self.async_authorize()
 
-        params = {
-            "macAddress": device.mac_address,
-            "applianceType": device.appliance_type,
-            "category": "CYCLE"
-        }
-        url = f"{API_URL}/commands/v1/context"
-        async with self._session.get(url, params=params, headers=self._headers) as response:
-            data = await response.json()
-            _LOGGER.debug(f"Context for mac[{device.mac_address}] type [{device.appliance_type}] {data}")
-            return data.get("payload", {})
+        payload = await self._fetch_context(device)
+        if payload is not None:
+            return payload
+
+        # Il fetch è fallito con errore HTTP: tipicamente il token è stato invalidato
+        # lato cloud dopo un blip di rete/DNS. Senza questo blocco l'integrazione
+        # riuserebbe lo stesso token morto a ogni ciclo, restando "giù" finché non si
+        # ricarica a mano. Ri-autentichiamo una volta e riproviamo. Il lock evita che
+        # i coordinator paralleli facciano login simultanei.
+        async with self._auth_lock:
+            # Un altro coordinator potrebbe aver già rinnovato la sessione mentre
+            # aspettavamo il lock: riprova prima di forzare un nuovo login.
+            payload = await self._fetch_context(device)
+            if payload is None:
+                _LOGGER.warning("hOn context non disponibile: ri-autenticazione dopo probabile perdita sessione")
+                self._session.cookie_jar.clear()
+                if await self.async_authorize():
+                    payload = await self._fetch_context(device)
+
+        return payload if payload is not None else {}
 
     async def load_statistics(self, device):
         params = {

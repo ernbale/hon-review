@@ -12,6 +12,14 @@ This document serves as a technical reference to understand the specific modific
   self._session = aiohttp.ClientSession(..., timeout=timeout)
   ```
 
+### 1.1 Auto Re-Authentication After a Network/DNS Blip (v1.0.8)
+**Problem**: After a transient network or DNS outage (the hOn cloud lives on AWS `api-iot.he.services`), the cloud often invalidates the session token. The original `async_get_context` only re-authenticated on a fixed 6-hour `SESSION_TIMEOUT`; in between it sent the GET **without checking the HTTP status** and did `data.get("payload", {})`. A `401` therefore became an empty `{}`, which `device.load_context()` swallows silently (`no shadow data in: {}`) and `_async_update_data` returns `None` with **no exception**. The coordinator considers the update "successful" and keeps reusing the dead token every 60s — the integration stays *down* until a manual reload re-creates the connection.
+**Solution**:
+- Split the fetch into `_fetch_context()` which inspects `response.status`: a non-200 returns `None` (signal "auth probably stale"), while transport errors (DNS/connection) are left to propagate so HA handles them as `UpdateFailed` (native retry).
+- `async_get_context()` now: on a `None` result, re-authenticates **once** and retries the fetch. `async_authorize()` already tries the saved token first and falls back to the full OAuth login if it's dead.
+- An `asyncio.Lock` (`self._auth_lock`) serializes re-auth so the parallel per-device coordinators don't trigger N simultaneous logins; tasks that lose the race re-check the fetch before forcing a new login.
+- **Net effect**: a blip no longer requires a manual reload — the integration recovers on its own within one or two update cycles.
+
 ## 2. Climate Entity Logic (`climate.py`)
 The `HonClimateEntity` class required significant overriding to handle the specific capabilities of this user's AC model.
 
