@@ -20,6 +20,20 @@ This document serves as a technical reference to understand the specific modific
 - An `asyncio.Lock` (`self._auth_lock`) serializes re-auth so the parallel per-device coordinators don't trigger N simultaneous logins; tasks that lose the race re-check the fetch before forcing a new login.
 - **Net effect**: a blip no longer requires a manual reload — the integration recovers on its own within one or two update cycles.
 
+### 1.2 CIAM / unified-api Login Migration (v1.0.9)
+**Problem**: Around 2026-06-15 Haier retired the auth flow this integration depended on. All entities went `unavailable`. Two things broke:
+1. The **Salesforce Aura → OAuth2** login (`/s/sfsites/aura`, `/apex/ProgressiveLogin`, `/services/oauth2/authorize`).
+2. The **`GET /commands/v1/appliance`** list endpoint — it still returns `200`, but with an **empty** `appliances: []`, so no entities are created (silently, no error logged). This is exactly what was observed: config entry `loaded`, but every `climate.clima_*` left as `restored/unavailable`.
+**Root cause**: the cloud moved to a **CIAM/PKCE** auth flow and reads appliances from a new **unified-api** endpoint. The per-appliance endpoints (`context`, `retrieve`, `statistics`, `send`) are **unchanged** and keep working with the new tokens.
+**Solution** (ported from upstream gvigroux 0.8.3, PR #323, preserving our timeout + auto-reconnect work):
+- **Auth** → `GET /ciam/authorize` (username/password + PKCE S256 `code_challenge`) → `session_id`, then `POST /ciam/token` (`session_id` + `code_verifier`) → `{cognito_token, id_token, refresh_token}`. Removes the Aura/OAuth chain, `client_id`, `redirect_uri` and the `fwuid` framework dance (`CONF_FRAMEWORK` left defined but unused; `async_get_frontdoor_url` and `async_try_saved_token` removed).
+- **Appliance list** → `POST /unified-api/v1/view/appliance-list {"deviceId": "homeassistant"}`, parsing `modules.applianceList.payload.appliances`.
+- **`SESSION_TIMEOUT` lowered to 600s** (CIAM tokens expire after ~15 min). `_ensure_session()` re-auths under `_auth_lock` before each context/set/send when stale.
+- **Kept our additions**: `ClientTimeout(total=30)`, `_auth_lock`, and the robust `_fetch_context`/`async_get_context` retry-on-non-200 from §1.1.
+- `const.py`: `APP_VERSION` `2.0.10` → `2.27.9`.
+**Gotcha**: the API authorizer reads `cognito-token` / `id-token` **case-sensitively (lowercase)**. `aiohttp` sends them lowercase as written, so it's fine — a `urllib`-based client that title-cases headers gets a misleading `403 "explicit deny in an identity-based policy"`.
+**Verified live** (2026-06-17): all 6 climates load with live `current_temperature`/target via the context poll.
+
 ## 2. Climate Entity Logic (`climate.py`)
 The `HonClimateEntity` class required significant overriding to handle the specific capabilities of this user's AC model.
 

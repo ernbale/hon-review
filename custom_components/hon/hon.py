@@ -4,6 +4,8 @@ import voluptuous as vol
 import aiohttp
 import asyncio
 import secrets
+import hashlib
+import base64
 import json
 import re
 import ast
@@ -25,10 +27,8 @@ from homeassistant.helpers import device_registry as dr
 from .const import (
     DOMAIN,
     CONF_ID_TOKEN,
-    CONF_FRAMEWORK,
     CONF_COGNITO_TOKEN,
     CONF_REFRESH_TOKEN,
-    AUTH_API,
     API_URL,
     APP_VERSION,
     OS_VERSION,
@@ -36,7 +36,8 @@ from .const import (
     DEVICE_MODEL,
 )
 
-SESSION_TIMEOUT     = 21600 # 6 hours session
+# I token CIAM scadono dopo ~15 minuti: ri-autentichiamo ben prima.
+SESSION_TIMEOUT     = 600 # seconds
 
 from .base import HonBaseCoordinator
 
@@ -57,22 +58,19 @@ class HonConnection:
         if( email != None ) and ( password != None ):
             self._email = email
             self._password = password
-            self._framework = "None"
         else:
             self._email = entry.data[CONF_EMAIL]
             self._password = entry.data[CONF_PASSWORD]
-            self._framework = entry.data.get(CONF_FRAMEWORK, "")
             self._id_token = entry.data.get(CONF_ID_TOKEN, "")
             self._refresh_token = entry.data.get(CONF_REFRESH_TOKEN, "")
             self._cognitoToken = entry.data.get(CONF_COGNITO_TOKEN, "")
 
-        self._frontdoor_url = ""
         self._start_time    = time.time()
 
         self._header = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36"
         }
-        # Aggiunto timeout di 30 secondi per evitare blocchi infiniti
+        # Timeout di 30 secondi per evitare blocchi infiniti
         timeout = aiohttp.ClientTimeout(total=30)
         self._session = aiohttp.ClientSession(headers=self._header, connector=aiohttp.TCPConnector(ssl=False), timeout=timeout)
         self._appliances = []
@@ -91,7 +89,7 @@ class HonConnection:
         if mac in self._coordinator_dict:
             return self._coordinator_dict[mac]
         return None
-        
+
     async def async_get_coordinator(self, appliance):
         mac = appliance.get("macAddress", "")
         if mac in self._coordinator_dict:
@@ -101,155 +99,75 @@ class HonConnection:
         return coordinator
 
 
-    async def async_get_frontdoor_url(self, error_code=0):
-
-        data = (
-            "message=%7B%22actions%22%3A%5B%7B%22id%22%3A%2279%3Ba%22%2C%22descriptor%22%3A%22apex%3A%2F%2FLightningLoginCustomController%2FACTION%24login%22%2C%22callingDescriptor%22%3A%22markup%3A%2F%2Fc%3AloginForm%22%2C%22params%22%3A%7B%22username%22%3A%22"
-            + urllib.parse.quote(self._email)
-            + "%22%2C%22password%22%3A%22"
-            + urllib.parse.quote(self._password)
-            + "%22%2C%22startUrl%22%3A%22%22%7D%7D%5D%7D&aura.context=%7B%22mode%22%3A%22PROD%22%2C%22fwuid%22%3A%22"
-            + urllib.parse.quote(self._framework)
-            + "%22%2C%22app%22%3A%22siteforce%3AloginApp2%22%2C%22loaded%22%3A%7B%22APPLICATION%40markup%3A%2F%2Fsiteforce%3AloginApp2%22%3A%22YtNc5oyHTOvavSB9Q4rtag%22%7D%2C%22dn%22%3A%5B%5D%2C%22globals%22%3A%7B%7D%2C%22uad%22%3Afalse%7D&aura.pageURI=%2FSmartHome%2Fs%2Flogin%2F%3Flanguage%3Dfr&aura.token=null"
-        )
-
-        async with self._session.post(
-            f"{AUTH_API}/s/sfsites/aura?r=3&other.LightningLoginCustom.login=1",
-            headers={"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
-            data=data
-        ) as resp:
-            if resp.status != 200:
-                _LOGGER.error("Unable to connect to the login service: " + str(resp.status))
-                return False
-
-            text = await resp.text()
-            try:
-                json_data = json.loads(text)
-                self._frontdoor_url = json_data["events"][0]["attributes"]["values"]["url"]
-            except:
-                # Framework must be updated
-                if text.find("clientOutOfSync") > 0 and error_code != 2:
-                    start = text.find("Expected: ") + 10
-                    end = text.find(" ", start)
-                    _LOGGER.debug("Framework update from ["+ self._framework+ "] to ["+ text[start:end]+ "]")
-                    self._framework = text[start:end]
-                    return await self.async_get_frontdoor_url(2)
-                _LOGGER.error("Unable to retreive the frontdoor URL. Message: " + text)
-                return 1
-
-        if error_code == 2 and self._entry != None:
-            # Update Framework
-            data = {**self._entry.data}
-            data[CONF_FRAMEWORK] = self._framework
-            self._hass.config_entries.async_update_entry(self._entry, data=data)
-
-        return 0
-
-    async def async_try_saved_token(self) -> bool:
-        """Attempt to reuse a previously saved token, skipping the full OAuth2 flow."""
-        if not self._cognitoToken or not self._id_token:
-            return False
-        try:
-            url = f"{API_URL}/commands/v1/appliance"
-            async with self._session.get(url, headers=self._headers) as resp:
-                if resp.status != 200:
-                    _LOGGER.debug(f"hOn saved token rejected (HTTP {resp.status}), falling back to full auth")
-                    return False
-                json_data = await resp.json()
-                self._appliances = json_data["payload"]["appliances"]
-                self._appliances = [a for a in self._appliances if "macAddress" in a]
-                self._appliances = [a for a in self._appliances if "applianceTypeId" in a]
-                self._start_time = time.time()
-                _LOGGER.debug("hOn authenticated using saved token")
-                return True
-        except Exception as e:
-            _LOGGER.debug(f"hOn saved token attempt failed ({e}), falling back to full auth")
-            return False
+    async def _ensure_session(self):
+        """Ri-autentica quando i token CIAM stanno per scadere (~15 min TTL).
+        Il lock evita che i coordinator paralleli facciano login simultanei."""
+        if time.time() - self._start_time > SESSION_TIMEOUT:
+            async with self._auth_lock:
+                if time.time() - self._start_time > SESSION_TIMEOUT:
+                    await self.async_authorize()
 
     async def async_authorize(self):
+        """Autentica sull'endpoint hOn CIAM e carica gli elettrodomestici.
 
-        if await self.async_try_saved_token():
-            return True
+        Sostituisce il vecchio login Salesforce Aura / OAuth2 dismesso da Haier a
+        giugno 2026: ora l'app entra via /ciam/authorize + /ciam/token (PKCE) e
+        legge i device da /unified-api/v1/view/appliance-list. Il vecchio
+        /commands/v1/appliance ora ritorna lista vuota (200 silenzioso).
+        context/retrieve/statistics/send restano invariati con i nuovi token."""
+        # PKCE (S256): verifier + challenge
+        code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(64)).rstrip(b"=").decode()
+        code_challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(code_verifier.encode()).digest()
+        ).rstrip(b"=").decode()
 
-        if await self.async_get_frontdoor_url(0) == 1:
-            return False
-
-        async with self._session.get(self._frontdoor_url) as resp:
+        # 1) Invia le credenziali, ricevi un session id monouso
+        params = {
+            "username": self._email,
+            "password": self._password,
+            "code_challenge": code_challenge,
+        }
+        async with self._session.get(f"{API_URL}/ciam/authorize", params=params) as resp:
             if resp.status != 200:
-                _LOGGER.error("Unable to connect to the login service: " + str(resp.status))
+                _LOGGER.error("Unable to connect to the CIAM authorize service: " + str(resp.status))
                 return False
-            await resp.text()
+            session_id = (await resp.json()).get("session_id")
+            if not session_id:
+                _LOGGER.error("Unable to get [session_id] - check your email/password")
+                return False
 
-        url = f"{AUTH_API}/apex/ProgressiveLogin?retURL=%2FSmartHome%2Fapex%2FCustomCommunitiesLanding"
-        async with self._session.get(url) as resp:
-            await resp.text()
-            
-        url = f"{AUTH_API}/services/oauth2/authorize?response_type=token+id_token&client_id=3MVG9QDx8IX8nP5T2Ha8ofvlmjLZl5L_gvfbT9.HJvpHGKoAS_dcMN8LYpTSYeVFCraUnV.2Ag1Ki7m4znVO6&redirect_uri=hon%3A%2F%2Fmobilesdk%2Fdetect%2Foauth%2Fdone&display=touch&scope=api%20openid%20refresh_token%20web&nonce=82e9f4d1-140e-4872-9fad-15e25fbf2b7c"
-        async with self._session.get(url) as resp:
-            text = await resp.text()
-            array = []
+        # 2) Scambia il session id (+ PKCE verifier) per i token
+        async with self._session.post(
+            f"{API_URL}/ciam/token",
+            json={"session_id": session_id, "code_verifier": code_verifier},
+        ) as resp:
             try:
-                array = text.split("'", 2)
-
-                if( len(array) == 1 ):
-                    #Implement a second way to get the token value
-                    #m = re.search('id_token\=(.+?)&', text) Works but deprecation warning
-                    m = re.search('id_token\\=(.+?)&', text)
-                    if m:
-                        self._id_token = m.group(1)
-                    else:
-                        _LOGGER.error("Unable to get [id_token] during authorization process (tried both options). Full response [" + text + "]")
-                        return False
-                else:
-                    params = urllib.parse.parse_qs(array[1])
-                    self._id_token = params["id_token"][0]
-            except:
-                if "ChangePassword" not in text:
-                    _LOGGER.error("Unable to get [id_token] during authorization process. Full response [" + text + "]")
-                else:
-                    _LOGGER.error("Unable to get connect. You need to change your password on the hOn app or go to https://account2.hon-smarthome.com/")
+                tokens = (await resp.json())["tokens"]
+                self._cognitoToken = tokens["cognito_token"]
+                self._id_token = tokens["id_token"]
+                self._refresh_token = tokens.get("refresh_token", "")
+            except (KeyError, TypeError):
+                _LOGGER.error("Unable to get tokens from /ciam/token. Response: " + await resp.text())
                 return False
 
-        post_headers = {"id-token": self._id_token}
-        data = {"appVersion": APP_VERSION,
-                "mobileId": self._mobile_id,
-                "os": OS,
-                "osVersion": OS_VERSION,
-                "deviceModel": DEVICE_MODEL}
-
-        async with self._session.post(f"{API_URL}/auth/v1/login", headers=post_headers, json=data) as resp:
+        # 3) Carica la lista elettrodomestici dalla unified-api
+        url = f"{API_URL}/unified-api/v1/view/appliance-list"
+        async with self._session.post(url, headers=self._headers, json={"deviceId": "homeassistant"}) as resp:
             try:
                 json_data = await resp.json()
-                self._cognitoToken = json_data["cognitoUser"]["Token"]
-            except:
-                text = await resp.text()
-                _LOGGER.error("hOn Invalid Data ["+ str(resp.text()) + "] after sending command ["+ str(data)+ "] with headers [" + str(post_headers) + "]. Response: " + text)
+                self._appliances = json_data["modules"]["applianceList"]["payload"]["appliances"]
+            except (KeyError, TypeError):
+                _LOGGER.error("hOn Invalid Data [" + (await resp.text())[:500] + "] after POST [" + url + "]")
                 return False
 
-        if self._entry is not None and self._hass is not None:
-            saved = {**self._entry.data}
-            saved[CONF_COGNITO_TOKEN] = self._cognitoToken
-            saved[CONF_ID_TOKEN] = self._id_token
-            self._hass.config_entries.async_update_entry(self._entry, data=saved)
-            _LOGGER.debug("hOn tokens persisted to config entry")
-
-        url = f"{API_URL}/commands/v1/appliance"
-        async with self._session.get(url,headers=self._headers) as resp:
-            try:
-                json_data = await resp.json()
-            except:
-                _LOGGER.error("hOn Invalid Data ["+ str(resp.text()) + "] after GET [" + url + "]")
-                return False
-
-            self._appliances = json_data["payload"]["appliances"]
             _LOGGER.debug(f"All appliances: {self._appliances}")
 
-            ''' Remove appliances with no mac'''
-            self._appliances = [appliance for appliance in self._appliances if "macAddress" in appliance]
+            # Tieni solo gli elettrodomestici con MAC e applianceTypeId
+            self._appliances = [
+                appliance for appliance in self._appliances
+                if "macAddress" in appliance and "applianceTypeId" in appliance
+            ]
 
-            ''' Remove appliances with no applianceTypeId'''
-            self._appliances = [appliance for appliance in self._appliances if "applianceTypeId" in appliance]
-    
         self._start_time = time.time()
         return True
 
@@ -295,11 +213,8 @@ class HonConnection:
 
     async def async_get_context(self, device):
 
-        # Create a new hOn session to avoid reaching the expiration
-        elapsed_time = time.time() - self._start_time
-        if( elapsed_time > SESSION_TIMEOUT ):
-            self._session.cookie_jar.clear()
-            await self.async_authorize()
+        # Rinnova la sessione CIAM prima che scada
+        await self._ensure_session()
 
         payload = await self._fetch_context(device)
         if payload is not None:
@@ -316,7 +231,6 @@ class HonConnection:
             payload = await self._fetch_context(device)
             if payload is None:
                 _LOGGER.warning("hOn context non disponibile: ri-autenticazione dopo probabile perdita sessione")
-                self._session.cookie_jar.clear()
                 if await self.async_authorize():
                     payload = await self._fetch_context(device)
 
@@ -342,6 +256,8 @@ class HonConnection:
         }
 
     async def async_set(self, mac, typeName, parameters):
+
+        await self._ensure_session()
 
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         command = json.loads("{}")
@@ -382,6 +298,9 @@ class HonConnection:
 
 
     async def send_command(self, device, command, parameters, ancillary_parameters):
+
+        await self._ensure_session()
+
         now = datetime.utcnow().isoformat()
         command = {
             "macAddress": device.mac_address,
@@ -431,5 +350,3 @@ def get_hOn_mac(device_id, hass):
     device_registry = dr.async_get(hass)
     device = device_registry.async_get(device_id)
     return next(iter(device.identifiers))[1]
-
-    
