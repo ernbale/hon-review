@@ -58,6 +58,21 @@ The standard hOn API uses generic enums. This model supports specific vertical p
   ```
 - This prevents the "old" server state from overwriting the "new" tentative local state while a command is processing.
 
+### 2.3 Watcher Timer Leak Fix (v1.0.10)
+**Problem**: `start_watcher()` armed the watcher with `async_track_time_interval`, which schedules a **repeating** callback. After a `set` command the watcher fired every 8s **forever**: `async_update_after_state_change` cleared `self._watcher = None` but the underlying interval handle was never cancelled, so it kept running and re-suppressing coordinator updates. `async_will_remove_from_hass` made it worse — it set `self._watcher = None` **without calling the cancel callback**, so removing/reloading an entity orphaned the live timer (a real timer leak).
+**Solution** (ported from upstream gvigroux `0.8.4`, PR #319 — only this hunk; the optimistic-state additions of that PR were already present in this fork via the `start_watcher()` calls in every setter):
+- Import `async_call_later` instead of `async_track_time_interval`.
+- `start_watcher()` now cancels any existing watcher first, then arms a **one-shot** `async_call_later`:
+  ```python
+  def start_watcher(self, timedelta=timedelta(seconds=8)):
+      if self._watcher is not None:
+          self._watcher()
+      self._watcher = async_call_later(self._hass, timedelta, self.async_update_after_state_change)
+      self.async_write_ha_state()
+  ```
+- `async_will_remove_from_hass()` now **invokes** the cancel callback before nulling: `self._watcher(); self._watcher = None`.
+- **Not ported from 0.8.4**: water heater platform (PR #328, applianceTypeId 10 — no such device here) and the air-to-water EN translations (PR #330). The full upstream `climate.py` was deliberately **not** merged, to preserve §2.1's custom vertical-swing mapping and the `climate_set_wind_direction_*` services this fork has on top of gvigroux.
+
 ## 3. Custom HACS Structure
 Original repository had a flat structure (all files in root).
 **Standard**: `custom_components/hon/`
