@@ -26,7 +26,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv, entity_platform
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_call_later
 
 from .const import (
     DOMAIN, 
@@ -207,7 +207,9 @@ class HonClimateEntity(CoordinatorEntity, ClimateEntity):
         await self._device.settings_command(parameters).send()
 
     def start_watcher(self, timedelta=timedelta(seconds=8)):
-        self._watcher = async_track_time_interval(self._hass, self.async_update_after_state_change, timedelta)
+        if self._watcher is not None:
+            self._watcher()
+        self._watcher = async_call_later(self._hass, timedelta, self.async_update_after_state_change)
         self.async_write_ha_state()
 
     async def async_update_after_state_change(self, now: Optional[datetime] = None) -> None:
@@ -365,4 +367,5 @@ class HonClimateEntity(CoordinatorEntity, ClimateEntity):
 
     async def async_will_remove_from_hass(self):
         if self._watcher is not None:
+            self._watcher()
             self._watcher = None
