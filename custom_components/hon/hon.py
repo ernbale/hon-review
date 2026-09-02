@@ -150,26 +150,88 @@ class HonConnection:
                 _LOGGER.error("Unable to get tokens from /ciam/token. Response: " + await resp.text())
                 return False
 
-        # 3) Carica la lista elettrodomestici dalla unified-api
-        url = f"{API_URL}/unified-api/v1/view/appliance-list"
-        async with self._session.post(url, headers=self._headers, json={"deviceId": "homeassistant"}) as resp:
-            try:
-                json_data = await resp.json()
-                self._appliances = json_data["modules"]["applianceList"]["payload"]["appliances"]
-            except (KeyError, TypeError):
-                _LOGGER.error("hOn Invalid Data [" + (await resp.text())[:500] + "] after POST [" + url + "]")
-                return False
+        # 3) Carica la lista elettrodomestici.
+        #    DUE FONTI, perche' negli ultimi mesi Haier ha rotto prima l'una e poi l'altra:
+        #      - giugno 2026: il vecchio GET /commands/v1/appliance smette di elencare i
+        #        device (200 con "appliances": []) -> migrazione alla unified-api;
+        #      - 2 set 2026: la unified-api risponde
+        #        {"applianceList":{"success":false,"code":"MissingRequiredParameter",
+        #         "message":"Missing required key 'FunctionName' in params"}}
+        #        (errore INTERNO loro: e' il FunctionName di una lambda AWS, non un
+        #        parametro del client; l'app hOn ufficiale nello stesso momento mostrava
+        #        "nessun elettrodomestico") mentre il vecchio endpoint era tornato a
+        #        rispondere con tutti e 8 gli apparecchi.
+        #    Nessuna delle due fonti e' affidabile da sola: si prova la unified-api e in
+        #    caso di risposta inutilizzabile si ricade sul vecchio endpoint (e viceversa
+        #    non serve: se la unified-api funziona, e' la fonte che usa anche l'app).
+        appliances = await self._fetch_appliances_unified()
+        if appliances is None:
+            _LOGGER.warning(
+                "hOn: unified-api inutilizzabile, ricado sul vecchio /commands/v1/appliance"
+            )
+            appliances = await self._fetch_appliances_legacy()
+        if appliances is None:
+            _LOGGER.error("hOn: nessuna delle due fonti ha restituito la lista elettrodomestici")
+            return False
 
-            _LOGGER.debug(f"All appliances: {self._appliances}")
+        _LOGGER.debug(f"All appliances: {appliances}")
 
-            # Tieni solo gli elettrodomestici con MAC e applianceTypeId
-            self._appliances = [
-                appliance for appliance in self._appliances
-                if "macAddress" in appliance and "applianceTypeId" in appliance
-            ]
+        # Tieni solo gli elettrodomestici con MAC e applianceTypeId
+        self._appliances = [
+            appliance for appliance in appliances
+            if "macAddress" in appliance and "applianceTypeId" in appliance
+        ]
 
         self._start_time = time.time()
         return True
+
+    async def _fetch_appliances_unified(self):
+        """Lista elettrodomestici dalla unified-api (fonte primaria, quella dell'app).
+
+        Ritorna la lista, oppure None se la risposta non e' utilizzabile: sia una lista
+        VUOTA sia una risposta malformata valgono None, perche' un account senza
+        apparecchi e un aggregatore rotto si presentano identici e in entrambi i casi
+        l'unica mossa utile e' provare l'altra fonte."""
+        url = f"{API_URL}/unified-api/v1/view/appliance-list"
+        try:
+            async with self._session.post(
+                url, headers=self._headers, json={"deviceId": "homeassistant"}
+            ) as resp:
+                try:
+                    json_data = await resp.json()
+                    appliances = json_data["modules"]["applianceList"]["payload"]["appliances"]
+                except (KeyError, TypeError):
+                    _LOGGER.error(
+                        "hOn Invalid Data [" + (await resp.text())[:500] + "] after POST [" + url + "]"
+                    )
+                    return None
+                return appliances or None
+        except aiohttp.ClientError as error:
+            _LOGGER.error(f"hOn: errore di trasporto sulla unified-api: {error}")
+            return None
+
+    async def _fetch_appliances_legacy(self):
+        """Lista elettrodomestici dal vecchio GET /commands/v1/appliance (fallback).
+
+        Dismesso da Haier a giugno 2026 (rispondeva con lista vuota) e tornato a
+        funzionare il 2 set 2026, quando si e' rotta la unified-api. Stesso schema di
+        appliance della unified-api: sotto "payload"."appliances" invece che sotto
+        "modules"."applianceList"."payload"."appliances"."""
+        url = f"{API_URL}/commands/v1/appliance"
+        try:
+            async with self._session.get(url, headers=self._headers) as resp:
+                try:
+                    json_data = await resp.json()
+                    appliances = json_data["payload"]["appliances"]
+                except (KeyError, TypeError):
+                    _LOGGER.error(
+                        "hOn Invalid Data [" + (await resp.text())[:500] + "] after GET [" + url + "]"
+                    )
+                    return None
+                return appliances or None
+        except aiohttp.ClientError as error:
+            _LOGGER.error(f"hOn: errore di trasporto sul vecchio endpoint appliance: {error}")
+            return None
 
 
     async def load_commands(self, appliance):
