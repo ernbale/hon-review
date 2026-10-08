@@ -53,16 +53,19 @@ class HonParameterFixed(HonParameter):
 class HonParameterRange(HonParameter):
     def __init__(self, key, attributes):
         super().__init__(key, attributes)
+        # Da ott 2026 l'API hOn manda a volte parametri "range" SENZA
+        # minimumValue/maximumValue/incrementValue (upstream #359, PR #361):
+        # senza .get() cadeva tutta la config entry in load_commands().
         try:
-            self._min = int(attributes["minimumValue"])
-            self._max = int(attributes["maximumValue"])
-            self._step = int(attributes["incrementValue"])
+            self._min = int(attributes.get("minimumValue", 0))
+            self._max = int(attributes.get("maximumValue", self._min))
+            self._step = int(attributes.get("incrementValue", 1)) or 1
             self._default = int(attributes.get("defaultValue", self._min))
         except (TypeError, ValueError):
-            self._min = float(attributes["minimumValue"].replace(",","."))
-            self._max = float(attributes["maximumValue"].replace(",","."))
-            self._step = float(attributes["incrementValue"].replace(",","."))
-            self._default = float(attributes.get("defaultValue", self._min).replace(",","."))
+            self._min = float(str(attributes.get("minimumValue", 0)).replace(",","."))
+            self._max = float(str(attributes.get("maximumValue", self._min)).replace(",","."))
+            self._step = float(str(attributes.get("incrementValue", 1)).replace(",",".")) or 1
+            self._default = float(str(attributes.get("defaultValue", self._min)).replace(",","."))
         self._value = self._default
         #_LOGGER.error(f"Param {key} min {self._min} | max {self._max} | step {self._step} | default {self._default}")
 
