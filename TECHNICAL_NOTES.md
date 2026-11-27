@@ -128,3 +128,10 @@ The fork does not share git history with `gvigroux/hon`, so upstream changes are
 **Fork fixes**
 - `device_id` / `entity_id` given as a plain string were turned into a set of characters (`set("abc")`) → HTTP 500 `NoneType has no attribute identifiers`. Now a string is treated as a one-item list.
 - New service `hon.stop_program`: sends the appliance's own `stopProgram` command (`onOffStatus 0`), as the official app does. `hon.turn_off` (fake startProgram) is left unchanged.
+
+## 8. v1.0.14 — Dishwasher buttons: "Programma" select, "Avvia", "Ferma"
+- `select` platform re-enabled in `PLATFORMS`, but the generic `startProgram.*` selects stay OFF (`GENERIC_SELECTS = False` in `select.py`): before, the platform was disabled, so no new technical entities appear on climates.
+- `select.<name>_programma` (`HonDishWasherProgramSelect`): Italian program names from `DW_PROGRAM_NAMES` in `const.py` (same names as the hOn app; voice/checkup programs left out). The choice is kept on the device object (`device.dw_selected_program`) and restored after a restart (RestoreEntity). Default `eco`.
+- `button.<name>_avvia`: starts the selected program with its default options (`device.start_command(program).send()`, same path as `hon.start_program`). Refuses with an error if `remoteCtrValid` != 1 or if `machMode` is 2/3 (a cycle is running).
+- `button.<name>_ferma`: `device.stop_command().send()` = the appliance's own `stopProgram`.
+- Only for dishwashers (applianceTypeId 9).

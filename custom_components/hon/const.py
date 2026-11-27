@@ -27,7 +27,8 @@ PLATFORMS = [
     "sensor",
     "binary_sensor",
     "button",
-    "switch"
+    "switch",
+    "select"
 ]
 
 '''
@@ -135,3 +136,43 @@ class ClimateEcoPilotMode:
 #    "1": "50%",
 #    "2": "100%"
 #}
+
+
+# Lavastoviglie: nomi italiani dei programmi come nell'app hOn (Candy CS 6C2S3PSA, 27 nov 2026).
+# Ordine = ordine del menu "Programma". I programmi che l'app non mostra (iot_voice_*, iot_checkup) restano fuori.
+DW_PROGRAM_NAMES = {
+    "eco": "Eco 45°C",
+    "universal": "Universale 60°C",
+    "intensive": "Intensivo",
+    "auto_wash_soil": "Auto Wash",
+    "auto_care_soil": "Auto Care",
+    "auto_plus_soil": "Auto Plus Sporco",
+    "prewash": "Prelavaggio",
+    "rapid_20": "Rapido 20'",
+    "rapid_35": "Wash&Dry 35'",
+    "rapid_49": "Rapido 49'",
+    "rapid_59": "Rapido 59'",
+    "glass": "Calici",
+    "silent": "Notte",
+    "hygiene": "Igiene",
+    "iot_turbopower": "Turbo Power",
+    "iot_baby_care": "Baby Care",
+    "iot_extra_hygiene": "Extra Hygiene",
+    "iot_super_wash": "Super Wash",
+    "iot_wok_grids_maxi_pans_soil": "Maxi Stoviglie e Griglie",
+    "iot_daily_care_soil": "Daily Care",
+    "iot_power_mix_wash_soil": "Power Mix Wash",
+    "iot_pot_&_pans": "Pentole & Padelle",
+    "iot_pyrex_and_glassware": "Pyrex & Glassware",
+    "iot_plastic_tupperware": "Plastiche & Tupperware",
+    "iot_cocktail_glasses_soil": "Cocktail Glasses",
+    "iot_pizza_menu_soil": "Pizza Menu",
+    "iot_porcelain": "Porcellane",
+    "iot_china_crystals": "Cristalli",
+    "iot_party": "Party",
+    "iot_happy_hour": "Happy Hour",
+    "iot_dinner_for_two": "Cena di coppia",
+    "iot_breakfast": "Colazione",
+    "iot_super_flash": "Super Flash",
+    "dishwasher_care": "Pulizia lavastoviglie",
+}

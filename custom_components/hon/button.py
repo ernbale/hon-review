@@ -1,5 +1,6 @@
 import logging
-from .const import DOMAIN
+from .const import DOMAIN, APPLIANCE_TYPE, DW_PROGRAM_NAMES
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.config_entries import ConfigEntry
 
 from homeassistant.helpers import entity_registry as er
@@ -22,6 +23,11 @@ async def async_setup_entry(hass, entry: ConfigEntry, async_add_entities) -> Non
         appliances.extend([HonBaseButtonEntity(coordinator, appliance)])
         if( "settings" in device.commands ):
             appliances.extend([HonBaseSettingsButtonEntity(coordinator, appliance)])
+        if appliance.get("applianceTypeId") == APPLIANCE_TYPE.DISH_WASHER:
+            if "startProgram" in device.commands:
+                appliances.append(HonDishWasherStartButton(coordinator))
+            if "stopProgram" in device.commands:
+                appliances.append(HonDishWasherStopButton(coordinator))
     async_add_entities(appliances)
 
 
@@ -111,3 +117,49 @@ class HonBaseSettingsButtonEntity(CoordinatorEntity, ButtonEntity):
 """
         create(self._coordinator.hass, text, "Get all settings")
 
+
+
+
+class HonDishWasherStartButton(CoordinatorEntity, ButtonEntity):
+    """Avvia il programma scelto nel menu "Programma" (opzioni di base del programma)."""
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator)
+        self._device = coordinator.device
+        self._attr_unique_id = self._device.mac_address + "_dw_start_button"
+        self._attr_name = self._device.name + " Avvia"
+        self._attr_icon = "mdi:play"
+
+    @property
+    def device_info(self):
+        return self._device.device_info
+
+    async def async_press(self) -> None:
+        if str(self._device.get("remoteCtrValid")) != "1":
+            raise HomeAssistantError("Controllo remoto spento: chiudi lo sportello, accendi la lavastoviglie e premi il tasto Wi-Fi.")
+        if str(self._device.get("machMode")) in ("2", "3"):
+            raise HomeAssistantError("Un programma e' gia' in corso: per cambiarlo premi prima Ferma.")
+        program = getattr(self._device, "dw_selected_program", None) or "eco"
+        _LOGGER.info("Lavastoviglie: avvio %s (%s)", program, DW_PROGRAM_NAMES.get(program, program))
+        await self._device.start_command(program).send()
+        await self.coordinator.async_request_refresh()
+
+
+class HonDishWasherStopButton(CoordinatorEntity, ButtonEntity):
+    """Ferma il programma in corso con lo stopProgram vero dell'apparecchio."""
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator)
+        self._device = coordinator.device
+        self._attr_unique_id = self._device.mac_address + "_dw_stop_button"
+        self._attr_name = self._device.name + " Ferma"
+        self._attr_icon = "mdi:stop"
+
+    @property
+    def device_info(self):
+        return self._device.device_info
+
+    async def async_press(self) -> None:
+        _LOGGER.info("Lavastoviglie: stop")
+        await self._device.stop_command().send()
+        await self.coordinator.async_request_refresh()

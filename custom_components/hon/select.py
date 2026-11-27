@@ -6,12 +6,16 @@ from homeassistant.components.select import SelectEntity, SelectEntityDescriptio
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers import translation
 
-from .const import DOMAIN
+from .const import DOMAIN, APPLIANCE_TYPE, DW_PROGRAM_NAMES
+from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .device import HonDevice
 from .parameter import HonParameterFixed, HonParameterEnum, HonParameterRange, HonParameterProgram
 
 
 _LOGGER = logging.getLogger(__name__)
+
+GENERIC_SELECTS = False
 
 default_values = {
     "windSpeed" : {
@@ -38,6 +42,17 @@ async def async_setup_entry(hass, entry , async_add_entities) -> None:
         # Get or Create Coordinator
         coordinator = await hon.async_get_coordinator(appliance)
         device = coordinator.device
+
+        # Menu "Programma" della lavastoviglie (usato dal pulsante "Avvia")
+        if (appliance.get("applianceTypeId") == APPLIANCE_TYPE.DISH_WASHER
+                and "startProgram" in device.commands):
+            appliances.append(HonDishWasherProgramSelect(coordinator))
+
+        # I menu generici startProgram.* restano spenti come prima che la
+        # piattaforma "select" venisse riaccesa (v1.0.14): creerebbero decine
+        # di entita' tecniche anche sui clima.
+        if not GENERIC_SELECTS:
+            continue
 
         #command = device.settings_command()
 
@@ -100,3 +115,42 @@ class HonSelect(HonDevice, SelectEntity):
             self._attr_options = [setting.value]
         self._attr_native_value = setting.value
         self.async_write_ha_state()
+
+
+
+class HonDishWasherProgramSelect(CoordinatorEntity, SelectEntity, RestoreEntity):
+    """Scelta del programma della lavastoviglie, con i nomi dell'app hOn."""
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator)
+        self._device = coordinator.device
+        programs = self._device.commands["startProgram"].get_programs().keys()
+        self._keys = [k for k in DW_PROGRAM_NAMES if k in programs]
+        self._attr_options = [DW_PROGRAM_NAMES[k] for k in self._keys]
+        self._attr_unique_id = self._device.mac_address + "_dw_program_select"
+        self._attr_name = self._device.name + " Programma"
+        self._attr_icon = "mdi:dishwasher"
+        if not getattr(self._device, "dw_selected_program", None):
+            self._device.dw_selected_program = "eco" if "eco" in self._keys else (self._keys[0] if self._keys else None)
+
+    @property
+    def device_info(self):
+        return self._device.device_info
+
+    @property
+    def current_option(self):
+        k = getattr(self._device, "dw_selected_program", None)
+        return DW_PROGRAM_NAMES.get(k)
+
+    async def async_select_option(self, option: str) -> None:
+        for k in self._keys:
+            if DW_PROGRAM_NAMES[k] == option:
+                self._device.dw_selected_program = k
+                break
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and last.state in self._attr_options:
+            await self.async_select_option(last.state)
