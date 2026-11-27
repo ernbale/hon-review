@@ -140,3 +140,7 @@ The fork does not share git history with `gvigroux/hon`, so upstream changes are
 - Option switches (`HonDishWasherOptionSwitch`, `DW_OPTIONS` in const.py): Mezzo carico (`halfLoad`), Extra asciutto (`extraDry`), Apri porta a fine ciclo (`openDoor`), Igiene (`hygiene`), Eco express (`ecoExpress`), Intensivo (`intensive`), Pastiglie tutto in uno (`tabStatus`). They send nothing by themselves: the state lives in `device.dw_options` (restored after restart) and "Avvia" sends ALL of them explicitly as 0/1, so values of the previous cycle are not reused. Options the selected program does not accept are ignored by `update_command` (it only touches keys present in the command).
 - Setting switches (`HonDishWasherSettingSwitch`, `DW_SETTINGS_SWITCHES`, entity_category CONFIG): Segnale acustico (`buzzerDisabled`, inverted), Luce interna (`lightStatus`), Ricorda ultimo programma (`lastCycleSavingStatus`). They change the machine at once through `device.settings_command({key: value}).send()` (real "settings" command, current values of the other settings kept).
 - There is no "silent" option on the Candy CS 6C2S3PSA: silent = program "Notte" (`silent`) in the Programma menu.
+
+## 10. v1.0.16 — Avvia / Ferma availability
+- "Avvia" is unavailable (greyed) while `machMode` is 2/3 or `remoteCtrValid` != 1; the error checks in `async_press` stay as a second guard.
+- "Ferma" is available only while `machMode` is 2 (running) or 3 (paused).

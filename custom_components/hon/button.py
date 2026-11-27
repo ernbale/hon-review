@@ -131,6 +131,13 @@ class HonDishWasherStartButton(CoordinatorEntity, ButtonEntity):
         self._attr_icon = "mdi:play"
 
     @property
+    def available(self) -> bool:
+        # Grigio (non disponibile) se un ciclo e' in corso o il controllo remoto e' spento
+        return (super().available
+                and str(self._device.get("machMode")) not in ("2", "3")
+                and str(self._device.get("remoteCtrValid")) == "1")
+
+    @property
     def device_info(self):
         return self._device.device_info
 
@@ -159,6 +166,11 @@ class HonDishWasherStopButton(CoordinatorEntity, ButtonEntity):
         self._attr_unique_id = self._device.mac_address + "_dw_stop_button"
         self._attr_name = self._device.name + " Ferma"
         self._attr_icon = "mdi:stop"
+
+    @property
+    def available(self) -> bool:
+        # Disponibile solo con un ciclo in corso o in pausa
+        return super().available and str(self._device.get("machMode")) in ("2", "3")
 
     @property
     def device_info(self):
