@@ -194,3 +194,14 @@ DW_SETTINGS_SWITCHES = {
     "lightStatus":           ("Luce interna", "mdi:lightbulb", False),
     "lastCycleSavingStatus": ("Ricorda ultimo programma", "mdi:history", False),
 }
+
+# Fasi della lavastoviglie (prPhase), tabella DISHWASHER_PR_PHASE di Andre0512/hon; 2, 3 e 5 verificate il 27 nov 2026
+DW_PHASES = {
+    0: "Pronta",
+    1: "Prelavaggio",
+    2: "Lavaggio",
+    3: "Risciacquo",
+    4: "Asciugatura",
+    5: "Finito",
+    6: "Risciacquo caldo",
+}

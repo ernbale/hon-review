@@ -144,3 +144,7 @@ The fork does not share git history with `gvigroux/hon`, so upstream changes are
 ## 10. v1.0.16 — Avvia / Ferma availability
 - "Avvia" is unavailable (greyed) while `machMode` is 2/3 or `remoteCtrValid` != 1; the error checks in `async_press` stay as a second guard.
 - "Ferma" is available only while `machMode` is 2 (running) or 3 (paused).
+
+## 11. v1.0.17 — Dishwasher phase in words
+- `sensor.<name>_program_phase` of dishwashers now shows the phase in Italian (`DW_PHASES` in const.py: Pronta, Prelavaggio, Lavaggio, Risciacquo, Asciugatura, Finito, Risciacquo caldo). The raw `prPhase` number is kept in the attribute `codice`.
+- No automation/dashboard used the numeric state (checked 27 nov 2026); the dishwasher page reads `codice` first and falls back to the state.

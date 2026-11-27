@@ -24,7 +24,7 @@ from homeassistant.const import (
 
 from homeassistant.config_entries import ConfigEntry
 
-from .const import DOMAIN, APPLIANCE_TYPE
+from .const import DW_PHASES, DOMAIN, APPLIANCE_TYPE
 from .base import HonBaseCoordinator, HonBaseSensorEntity
 
 divider = 1.0
@@ -395,8 +395,19 @@ class HonBaseProgramPhase(HonBaseSensorEntity):
             self.translation_key    = "wash_program_phase"
             self._attr_icon         = "mdi:washing-machine"
 
+        if( self._type_id == APPLIANCE_TYPE.DISH_WASHER ):
+            self._attr_icon         = "mdi:dishwasher"
+
     def coordinator_update(self):
         programPhase = self._device.get("prPhase")
+        if self._type_id == APPLIANCE_TYPE.DISH_WASHER:
+            # Lavastoviglie: la fase scritta in parole, il numero resta nell'attributo "codice"
+            try:
+                self._attr_native_value = DW_PHASES.get(int(programPhase), programPhase)
+            except (TypeError, ValueError):
+                self._attr_native_value = programPhase
+            self._attr_extra_state_attributes = {"codice": programPhase}
+            return
         self._attr_native_value = programPhase
 
 
