@@ -3,7 +3,10 @@ from dataclasses import dataclass
 from typing import Any
 
 
-from .const import DOMAIN
+from .const import DOMAIN, APPLIANCE_TYPE, DW_OPTIONS, DW_SETTINGS_SWITCHES
+from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.entity import EntityCategory
 from .device import HonDevice
 from .parameter import HonParameter, HonParameterFixed, HonParameterEnum, HonParameterRange, HonParameterProgram
 from .base import HonBaseCoordinator, HonBaseSwitchEntity
@@ -35,6 +38,16 @@ async def async_setup_entry(hass, entry: ConfigEntry, async_add_entities) -> Non
     for appliance in hon.appliances:
         coordinator = await hon.async_get_coordinator(appliance)
         device = coordinator.device
+
+        # Lavastoviglie: opzioni del lavaggio (per "Avvia") e impostazioni
+        if appliance.get("applianceTypeId") == APPLIANCE_TYPE.DISH_WASHER:
+            if "startProgram" in device.commands:
+                for key in DW_OPTIONS:
+                    appliances.append(HonDishWasherOptionSwitch(coordinator, key))
+            if "settings" in device.commands:
+                for key in DW_SETTINGS_SWITCHES:
+                    if device.get(key, "N/A") != "N/A":
+                        appliances.append(HonDishWasherSettingSwitch(coordinator, key))
 
         if (("settings" in device.commands) 
             and (device.get("silentSleepStatus", "N/A") != "N/A")):
@@ -235,3 +248,77 @@ class HonSwitchEntity(HonBaseSwitchEntity):
         if update:
             self.async_write_ha_state()
 
+
+
+
+class HonDishWasherOptionSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
+    """Opzione del prossimo lavaggio: non manda niente alla macchina, la usa il pulsante "Avvia"."""
+
+    def __init__(self, coordinator, key) -> None:
+        super().__init__(coordinator)
+        self._device = coordinator.device
+        self._key = key
+        name, icon = DW_OPTIONS[key]
+        self._attr_unique_id = f"{self._device.mac_address}_dw_option_{key}"
+        self._attr_name = f"{self._device.name} {name}"
+        self._attr_icon = icon
+        if not hasattr(self._device, "dw_options"):
+            self._device.dw_options = {}
+        self._device.dw_options.setdefault(key, False)
+
+    @property
+    def device_info(self):
+        return self._device.device_info
+
+    @property
+    def is_on(self):
+        return bool(self._device.dw_options.get(self._key))
+
+    async def async_turn_on(self, **kwargs) -> None:
+        self._device.dw_options[self._key] = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        self._device.dw_options[self._key] = False
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and last.state in ("on", "off"):
+            self._device.dw_options[self._key] = last.state == "on"
+
+
+class HonDishWasherSettingSwitch(CoordinatorEntity, SwitchEntity):
+    """Impostazione della lavastoviglie: cambia subito sulla macchina (comando "settings")."""
+
+    def __init__(self, coordinator, key) -> None:
+        super().__init__(coordinator)
+        self._device = coordinator.device
+        self._key = key
+        name, icon, self._invert = DW_SETTINGS_SWITCHES[key]
+        self._attr_unique_id = f"{self._device.mac_address}_dw_setting_{key}"
+        self._attr_name = f"{self._device.name} {name}"
+        self._attr_icon = icon
+        self._attr_entity_category = EntityCategory.CONFIG
+
+    @property
+    def device_info(self):
+        return self._device.device_info
+
+    @property
+    def is_on(self):
+        on = str(self._device.get(self._key)) == "1"
+        return (not on) if self._invert else on
+
+    async def _set(self, on: bool) -> None:
+        value = (0 if on else 1) if self._invert else (1 if on else 0)
+        await self._device.settings_command({self._key: value}).send()
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._set(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._set(False)

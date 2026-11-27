@@ -135,3 +135,8 @@ The fork does not share git history with `gvigroux/hon`, so upstream changes are
 - `button.<name>_avvia`: starts the selected program with its default options (`device.start_command(program).send()`, same path as `hon.start_program`). Refuses with an error if `remoteCtrValid` != 1 or if `machMode` is 2/3 (a cycle is running).
 - `button.<name>_ferma`: `device.stop_command().send()` = the appliance's own `stopProgram`.
 - Only for dishwashers (applianceTypeId 9).
+
+## 9. v1.0.15 — Dishwasher option and setting switches
+- Option switches (`HonDishWasherOptionSwitch`, `DW_OPTIONS` in const.py): Mezzo carico (`halfLoad`), Extra asciutto (`extraDry`), Apri porta a fine ciclo (`openDoor`), Igiene (`hygiene`), Eco express (`ecoExpress`), Intensivo (`intensive`), Pastiglie tutto in uno (`tabStatus`). They send nothing by themselves: the state lives in `device.dw_options` (restored after restart) and "Avvia" sends ALL of them explicitly as 0/1, so values of the previous cycle are not reused. Options the selected program does not accept are ignored by `update_command` (it only touches keys present in the command).
+- Setting switches (`HonDishWasherSettingSwitch`, `DW_SETTINGS_SWITCHES`, entity_category CONFIG): Segnale acustico (`buzzerDisabled`, inverted), Luce interna (`lightStatus`), Ricorda ultimo programma (`lastCycleSavingStatus`). They change the machine at once through `device.settings_command({key: value}).send()` (real "settings" command, current values of the other settings kept).
+- There is no "silent" option on the Candy CS 6C2S3PSA: silent = program "Notte" (`silent`) in the Programma menu.

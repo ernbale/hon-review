@@ -1,5 +1,5 @@
 import logging
-from .const import DOMAIN, APPLIANCE_TYPE, DW_PROGRAM_NAMES
+from .const import DOMAIN, APPLIANCE_TYPE, DW_PROGRAM_NAMES, DW_OPTIONS
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.config_entries import ConfigEntry
 
@@ -141,7 +141,12 @@ class HonDishWasherStartButton(CoordinatorEntity, ButtonEntity):
             raise HomeAssistantError("Un programma e' gia' in corso: per cambiarlo premi prima Ferma.")
         program = getattr(self._device, "dw_selected_program", None) or "eco"
         _LOGGER.info("Lavastoviglie: avvio %s (%s)", program, DW_PROGRAM_NAMES.get(program, program))
-        await self._device.start_command(program).send()
+        # Opzioni dagli interruttori: tutte esplicite (0/1), cosi' non restano quelle
+        # dell'ultimo ciclo; quelle che il programma non accetta vengono ignorate.
+        chosen = getattr(self._device, "dw_options", {})
+        parameters = {k: (1 if chosen.get(k) else 0) for k in DW_OPTIONS}
+        _LOGGER.info("Lavastoviglie: opzioni %s", parameters)
+        await self._device.start_command(program, parameters).send()
         await self.coordinator.async_request_refresh()
 
 

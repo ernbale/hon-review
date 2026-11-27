@@ -176,3 +176,21 @@ DW_PROGRAM_NAMES = {
     "iot_super_flash": "Super Flash",
     "dishwasher_care": "Pulizia lavastoviglie",
 }
+
+# Opzioni del lavaggio (interruttori usati dal pulsante "Avvia"): chiave hOn -> (nome, icona)
+DW_OPTIONS = {
+    "halfLoad":   ("Mezzo carico", "mdi:circle-half-full"),
+    "extraDry":   ("Extra asciutto", "mdi:weather-sunny"),
+    "openDoor":   ("Apri porta a fine ciclo", "mdi:door-open"),
+    "hygiene":    ("Igiene", "mdi:shield-check-outline"),
+    "ecoExpress": ("Eco express", "mdi:leaf"),
+    "intensive":  ("Intensivo", "mdi:water-plus"),
+    "tabStatus":  ("Pastiglie tutto in uno", "mdi:pill"),
+}
+
+# Impostazioni della lavastoviglie (comando "settings"): chiave -> (nome, icona, invertito)
+DW_SETTINGS_SWITCHES = {
+    "buzzerDisabled":        ("Segnale acustico", "mdi:volume-high", True),
+    "lightStatus":           ("Luce interna", "mdi:lightbulb", False),
+    "lastCycleSavingStatus": ("Ricorda ultimo programma", "mdi:history", False),
+}
