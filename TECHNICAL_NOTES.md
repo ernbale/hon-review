@@ -106,3 +106,25 @@ To ensure this integration works with HACS as a custom repository:
 3.  **Git Tags**: HACS looks for GitHub Releases/Tags.
     - Workflow: Commit changes -> `git tag v1.0.X` -> `git push origin v1.0.X`.
     - This forces HACS to see a new update available.
+
+## 7. v1.0.13 — Upstream sync (gvigroux 0.8.5–0.8.7) + dishwasher fixes
+The fork does not share git history with `gvigroux/hon`, so upstream changes are ported one by one.
+
+**Ported from upstream**
+- #335 appliances without a `series` field no longer raise KeyError.
+- #336 appliances without a command set (e.g. TVs) are skipped quietly.
+- #346 deprecated `CONCENTRATION_*` constants replaced (removal in HA 2027.8).
+- #369 dishwasher door: reported only while the appliance is connected.
+- #371 (base.py only) refresh cooldown 1.5 s instead of 10 s: faster state after a command.
+- #375 TLS certificates of the hOn API are verified again (`ssl=False` removed, our timeout kept).
+- #378 deprecated `CONN_CLASS_LOCAL_POLL` removed from the config flow.
+- #379 (setup part only) one climate unit that fails to set up no longer removes all the others. The temperature guards were already in the fork.
+
+**Not ported (on purpose)**
+- #368/#385 light switch: #385 sends `lightStatus` through `coordinator.async_set`, i.e. the fake `startProgram` "HOME_ASSISTANT" that also stops a dishwasher. Too risky on a dishwasher; the setting is reachable with `hon.update_settings`.
+- #373 sticky `echoStatus`: changes restore logic of switches for a problem not seen here.
+- #376/#382 water heaters, #387 Candy washers: no such appliances.
+
+**Fork fixes**
+- `device_id` / `entity_id` given as a plain string were turned into a set of characters (`set("abc")`) → HTTP 500 `NoneType has no attribute identifiers`. Now a string is treated as a one-item list.
+- New service `hon.stop_program`: sends the appliance's own `stopProgram` command (`onOffStatus 0`), as the official app does. `hon.turn_off` (fake startProgram) is left unchanged.

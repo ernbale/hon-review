@@ -55,7 +55,14 @@ async def async_setup_entry(hass, entry: ConfigEntry, async_add_entities) -> Non
         if appliance['applianceTypeId'] == 11:
             coordinator = await hon.async_get_coordinator(appliance)
             await coordinator.async_config_entry_first_refresh()
-            appliances.append(HonClimateEntity(hass, coordinator, entry, appliance))
+            try:
+                appliances.append(HonClimateEntity(hass, coordinator, entry, appliance))
+            except Exception:
+                # Upstream gvigroux #379: un clima che non si riesce a creare
+                # non deve far sparire tutti gli altri.
+                _LOGGER.exception(
+                    "Could not set up climate entity for %s, skipping it",
+                    appliance.get('nickName') or appliance.get('macAddress'))
 
     async_add_entities(appliances)
 

@@ -65,9 +65,17 @@ def get_parameters(call):
         #device_ids.append(get_device_id(hass, entity_id))
     #return list(dict.fromkeys(device_ids))
 
+def _as_list(value):
+    # HA accetta sia "id" sia ["id"]: set("id") farebbe un insieme di caratteri
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return list(value)
+
 def get_device_ids(hass, call):
-    device_ids = set(call.data.get("device_id", []))
-    entity_ids = call.data.get("entity_id", [])
+    device_ids = set(_as_list(call.data.get("device_id")))
+    entity_ids = _as_list(call.data.get("entity_id"))
 
     ent_reg = er.async_get(hass)
 
@@ -82,8 +90,8 @@ def get_device_ids(hass, call):
 from homeassistant.helpers import entity_registry as er
 
 async def async_get_device_ids(hass, call):
-    device_ids = set(call.data.get("device_id", []))
-    entity_ids = call.data.get("entity_id", [])
+    device_ids = set(_as_list(call.data.get("device_id")))
+    entity_ids = _as_list(call.data.get("entity_id"))
 
     ent_reg = er.async_get(hass)
 
@@ -397,6 +405,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             await device.start_command(program, parameters).send()
 
 
+    async def handle_stop_program(call):
+        # Stop vero: manda il comando "stopProgram" del modello (quello dell'app hOn),
+        # non il finto startProgram "HOME_ASSISTANT" usato da hon.turn_off.
+        for device_id in get_device_ids(hass, call):
+            device = hon.get_device(hass, device_id)
+            if "stopProgram" not in device.commands:
+                raise HomeAssistantError(f"{device.name}: nessun comando stopProgram per questo apparecchio")
+            await device.stop_command().send()
+            await device.coordinator.async_request_refresh()
+
+
     async def handle_custom_request(call):
         #device_id   = call.data.get("device")
         #mac         = get_hOn_mac(device_id, hass)
@@ -463,6 +482,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.services.async_register(DOMAIN, "climate_turn_health_mode_off",  handle_health_mode_off)
 
     hass.services.async_register(DOMAIN, "start_program",   handle_start_program)
+    hass.services.async_register(DOMAIN, "stop_program",    handle_stop_program)
     hass.services.async_register(DOMAIN, "update_settings", handle_update_settings)
     hass.services.async_register(
         domain=DOMAIN,

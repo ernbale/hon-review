@@ -692,6 +692,13 @@ start_program:
       selector:
         text:
 
+stop_program:
+  name: Stop the running program of a hOn device
+  description: Sends the appliance's own stopProgram command (e.g. dishwasher, washing machine)
+  target:
+    entity:
+      integration: hon
+
 update_settings:
   name: Update any settings of a hOn device
   description: You can get all the details to start a program by clicking on the button inside the device
