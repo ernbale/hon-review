@@ -24,7 +24,7 @@ from homeassistant.const import (
 
 from homeassistant.config_entries import ConfigEntry
 
-from .const import DW_PHASES, DOMAIN, APPLIANCE_TYPE
+from .const import DW_PHASES, DW_PROGRAM_NAMES, DOMAIN, APPLIANCE_TYPE
 from .base import HonBaseCoordinator, HonBaseSensorEntity
 
 divider = 1.0
@@ -201,8 +201,32 @@ class HonBaseProgramName(HonBaseSensorEntity):
         
         self.translation_key = "programs_" + self._type_name.lower()
         self._attr_icon = "mdi:playlist-play"
+        if self._type_id == APPLIANCE_TYPE.DISH_WASHER:
+            self.translation_key = None          # stato gia' in italiano
+            self._attr_icon = "mdi:dishwasher"
 
     def coordinator_update(self):
+        if self._type_id == APPLIANCE_TYPE.DISH_WASHER:
+            # Lavastoviglie: nome dal codice prCode (affidabile), con i nomi italiani dell'app hOn.
+            code = self._device.get("prCode")
+            key = None
+            if code is not None:
+                table = self._device.program_by_code()
+                # 1) il programma della cronologia del cloud, se il suo codice coincide (piu' preciso)
+                cloud = self._device.getProgramName()
+                if cloud and getattr(self._device, "_program_codes", {}).get(cloud) == str(code):
+                    key = cloud
+                # 2) altrimenti il programma base di quel codice
+                if key is None:
+                    key = table.get(str(code))
+            if key:
+                self._attr_native_value = DW_PROGRAM_NAMES.get(key, key)
+            else:
+                self._attr_native_value = "Nessun programma"
+            self._attr_available = True
+            self._attr_extra_state_attributes = {"programma": key, "codice": code}
+            return
+
         # Debug için tüm attributes'ı logla
         _LOGGER.debug(f"[{self._name}] All attributes: {self._device.attributes}")
         

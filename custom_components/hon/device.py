@@ -71,6 +71,32 @@ class HonDevice(CoordinatorEntity):
     def has(self, item, default=None):
         return self.get(item) != None
 
+    def program_by_code(self):
+        """Tabella prCode -> chiave programma, presa dai comandi startProgram del modello."""
+        cache = getattr(self, "_program_by_code", None)
+        if cache:
+            return cache
+        table = {}
+        try:
+            command = self._commands.get("startProgram")
+            if command is not None:
+                # Piu' programmi possono avere lo stesso prCode (i programmi "iot_" dell'app
+                # riusano il codice di un programma base): a parita' vince quello base.
+                for key, program in command.get_programs().items():
+                    param = program.parameters.get("prCode")
+                    value = getattr(param, "value", None) if param is not None else None
+                    if value in (None, ""):
+                        continue
+                    value = str(value)
+                    if value not in table or (table[value].startswith("iot_") and not key.startswith("iot_")):
+                        table[value] = key
+                self._program_codes = {k: str(getattr(p.parameters.get("prCode"), "value", ""))
+                                       for k, p in command.get_programs().items() if p.parameters.get("prCode") is not None}
+        except Exception as e:
+            _LOGGER.debug("[%s] program_by_code failed: %s", self._name, e)
+        self._program_by_code = table
+        return table
+
     def getProgramName(self):
         try:
             # Önce activity.attributes içinde ara

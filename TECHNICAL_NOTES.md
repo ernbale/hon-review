@@ -148,3 +148,9 @@ The fork does not share git history with `gvigroux/hon`, so upstream changes are
 ## 11. v1.0.17 — Dishwasher phase in words
 - `sensor.<name>_program_phase` of dishwashers now shows the phase in Italian (`DW_PHASES` in const.py: Pronta, Prelavaggio, Lavaggio, Risciacquo, Asciugatura, Finito, Risciacquo caldo). The raw `prPhase` number is kept in the attribute `codice`.
 - No automation/dashboard used the numeric state (checked 27 nov 2026); the dishwasher page reads `codice` first and falls back to the state.
+
+## 12. v1.0.18 — Dishwasher program name from prCode
+- Before: `sensor.<name>_program_name` came only from the cloud command history → "No program" for programs started from HA, "home_assistant" after `hon.turn_off`, English keys (`silent`).
+- Now (dishwashers only): `device.program_by_code()` builds prCode → program from the model's `startProgram` command set. Several programs share one prCode (the app's `iot_*` programs reuse the code of a base program): on a tie the base program wins. If the cloud history names a program whose prCode equals the current one, that more specific program is used.
+- State = Italian name from `DW_PROGRAM_NAMES` ("Nessun programma" if unknown); attributes `programma` (key) and `codice` (prCode). Icon `mdi:dishwasher`. The dishwasher page reads `programma` first.
+- Checked offline on the public command set of the twin model (Hoover HI 6C4S1PTA): code 8 → eco, code 8 + history iot_happy_hour → iot_happy_hour, code 25 → dishwasher_care.
